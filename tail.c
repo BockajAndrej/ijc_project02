@@ -10,7 +10,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define MAX_LINE_LENGTH 2047
+#define MAX_LINE_LENGTH 2048
 #define DEFAULT_CNT_LINES 10
 #define DEFAULT_READ_STREAM stdin
 
@@ -35,6 +35,7 @@ typedef struct
     int readIndx;
     int writeIndx;
     int size;
+    bool warning;
 } CircularBuffer;
 
 CircularBuffer *cbuf_create(int n);
@@ -61,6 +62,7 @@ CircularBuffer *cbuf_create(int n)
     cb->readIndx = 0;
     cb->writeIndx = 0;
     cb->size = 0;
+    cb->warning = false;
     return cb;
 }
 int cbuf_put(CircularBuffer *cb, char *line)
@@ -75,7 +77,7 @@ int cbuf_put(CircularBuffer *cb, char *line)
     if (cb->data[cb->writeIndx] == NULL)
     {
         fprintf(stderr, "ERROR: Memory allocation failed.\n");
-        //Free previously allocated memory
+        // Free previously allocated memory
         for (int j = 0; cb->size > 0; j++)
         {
             char *a = cbuf_get(cb);
@@ -118,21 +120,23 @@ void cbuf_free(CircularBuffer *cb)
     free(cb);
 }
 
-bool cb_put(CircularBuffer *cb, char *str){
-    if (cbuf_put(cb, str) == EOF){
-        fprintf(stderr, "ERROR: Can not put item to CB\n");
+bool cb_put(CircularBuffer *cb, char *str)
+{
+    if (cbuf_put(cb, str) == EOF)
         return 1;
-    }
     return 0;
 }
-void cb_get(CircularBuffer *cb){
+void cb_get(CircularBuffer *cb, bool enable_print)
+{
     char *a = cbuf_get(cb);
-    printf("%s\n", a);
+    if (enable_print)
+        printf("%s\n", a);
     free(a);
 }
 
 int main(int argc, char *argv[])
 {
+    // TODO warning pri preteceni
     FILE *f = DEFAULT_READ_STREAM;
     long lines = DEFAULT_CNT_LINES;
 
@@ -161,7 +165,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            f = fopen(argv[1], "r");
+            f = fopen(argv[i], "r");
             if (f == NULL)
             {
                 fprintf(stderr, "ERROR: Could not open file\n");
@@ -170,23 +174,43 @@ int main(int argc, char *argv[])
         }
     }
 
-    CircularBuffer *cb = cbuf_create(5);
+    CircularBuffer *cb = cbuf_create(lines);
 
     if (cb == NULL)
     {
-        printf("Memory allocation failed.\n");
+        printf("ERROR: Memory allocation failed.\n");
+        fclose(f);
         return 1;
     }
 
-    cb_put(cb, "ahoj");
-    cb_put(cb, "ako");
-    cb_put(cb, "sa");
-    cb_put(cb, "mas");
+    char buffer[MAX_LINE_LENGTH];
+    while (fgets(buffer, sizeof(buffer), f) != NULL)
+    {
+        // Remove trailing newline, if needed
+        if (strchr(buffer, '\n') == NULL)
+        {
+            if (cb->warning == false)
+            {
+                fprintf(stderr, "ERROR: Line may have been truncated\n");
+                cb->warning = true;
+            }
+            int c = 0;
+            while ((c = fgetc(f)) != '\n' && c != EOF);
+        }
+        //Remove new line
+        buffer[strcspn(buffer, "\n")] = '\0';
+        if (cb_put(cb, buffer))
+        {
+            cb_get(cb, false);
+            cb_put(cb, buffer);
+        }
+        strcpy(buffer, "");
+    }
 
-    cb_get(cb);
-    cb_get(cb);
-    cb_get(cb);
-    cb_get(cb);
+    for (int i = 0; cb->size > 0; i++)
+    {
+        cb_get(cb, true);
+    }
 
     cbuf_free(cb);
 
