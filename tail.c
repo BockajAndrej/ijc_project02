@@ -62,7 +62,7 @@ CircularBuffer *cbuf_create(int n)
     cb->readIndx = 0;
     cb->writeIndx = 0;
     cb->size = 0;
-    cb->warning = false;
+    cb->warning = true;
     return cb;
 }
 int cbuf_put(CircularBuffer *cb, char *line)
@@ -174,6 +174,10 @@ int main(int argc, char *argv[])
         }
     }
 
+    if(lines == 0){
+        return 0;
+    }
+    
     CircularBuffer *cb = cbuf_create(lines);
 
     if (cb == NULL)
@@ -189,12 +193,13 @@ int main(int argc, char *argv[])
         // Remove trailing newline, if needed
         if (strchr(buffer, '\n') == NULL)
         {
-            if (cb->warning == false)
+            if (cb->warning)
             {
                 fprintf(stderr, "ERROR: Line may have been truncated\n");
-                cb->warning = true;
+                cb->warning = false;
             }
             int c = 0;
+            //Move cursor on new line
             while ((c = fgetc(f)) != '\n' && c != EOF);
         }
         //Remove new line
